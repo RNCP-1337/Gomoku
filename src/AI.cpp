@@ -56,6 +56,7 @@ int AI::tryMove(int cell, int color, int depth, int alpha, int beta, bool oppFiv
 // Negamax (Min-Max where each side maximizes its own score) with alpha-beta pruning.
 int AI::search(int depth, int alpha, int beta, int color, bool oppFive) {
     nodes++;
+    if (DEPTH - depth > reached) reached = DEPTH - depth;
     if (depth == 0) return b.eval(color);
     int moves[32];
     int n = genMoves(color, moves, WIDTH[depth]);
@@ -72,6 +73,7 @@ int AI::search(int depth, int alpha, int beta, int color, bool oppFive) {
 
 int AI::bestMove(int color) {
     nodes = 0;
+    reached = 0;
     nroot = genMoves(color, rootMoves, WIDTH[DEPTH]);
     if (nroot == 0) {  // empty board (or no stone around): center, or any legal cell
         int center = N / 2 * N + N / 2;

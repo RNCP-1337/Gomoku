@@ -10,6 +10,8 @@ static const int DY8[8] = {0, 1, 1, 1, 0, -1, -1, -1};
 static const int WINDOW[6] = {0, 1, 10, 100, 1000, 100000};
 // Value of the number of pairs captured.
 static const int CAPTURE[6] = {0, 300, 800, 2000, 6000, 100000};
+// A potential capture is worth 1/THREAT of the capture; a winning figure is worth FIGURE.
+static const int THREAT = 3, FIGURE = 50000;
 
 static int windowValue(int nb, int nw) {
     if (nw == 0) return WINDOW[nb];
@@ -17,7 +19,7 @@ static int windowValue(int nb, int nw) {
     return 0;  // both colors: nobody can make five here
 }
 
-Board::Board() : caps{0, 0, 0}, score(0) {
+Board::Board() : caps{0, 0, 0}, score(0), fours{0, 0, 0}, threats{0, 0, 0} {
     for (int i = 0; i < SIZE; i++) cells[i] = near[i] = 0;
 }
 
@@ -48,11 +50,34 @@ void Board::delta(int cell, int &db, int &dw) const {
     }
 }
 
+// Adds sign * (everything the heuristic counts around cell) to score, fours and threats:
+// the 20 windows of 5 cells and the 16 capture patterns of 4 cells holding cell.
+void Board::update(int cell, int sign) {
+    int x = cell % N, y = cell / N;
+    for (int d = 0; d < 4; d++) {
+        int line[9];
+        for (int k = -4; k <= 4; k++) line[k + 4] = at(x + k * DX[d], y + k * DY[d]);
+        for (int s = 0; s < 5; s++) {
+            int count[4] = {0, 0, 0, 0};
+            for (int i = s; i < s + 5; i++) count[line[i]]++;
+            if (count[OUT]) continue;
+            score += sign * windowValue(count[BLACK], count[WHITE]);
+            if (count[BLACK] == 4 && !count[WHITE]) fours[BLACK] += sign;
+            if (count[WHITE] == 4 && !count[BLACK]) fours[WHITE] += sign;
+        }
+        for (int s = 1; s < 5; s++) {  // X O O _ or _ O O X: X can capture the pair
+            int pair = line[s + 1], hunter = other(pair), a = line[s], e = line[s + 3];
+            if ((pair == BLACK || pair == WHITE) && line[s + 2] == pair
+                && ((a == hunter && e == EMPTY) || (a == EMPTY && e == hunter)))
+                threats[hunter] += sign;
+        }
+    }
+}
+
 void Board::put(int cell, int color) {
-    int db, dw;
-    delta(cell, db, dw);
-    score += color == BLACK ? db : dw;
+    update(cell, -1);
     cells[cell] = color;
+    update(cell, 1);
     int x = cell % N, y = cell / N;
     for (int j = y - 1; j <= y + 1; j++)
         for (int i = x - 1; i <= x + 1; i++)
@@ -60,11 +85,9 @@ void Board::put(int cell, int color) {
 }
 
 void Board::remove(int cell) {
-    int color = cells[cell];
+    update(cell, -1);
     cells[cell] = EMPTY;
-    int db, dw;
-    delta(cell, db, dw);
-    score -= color == BLACK ? db : dw;
+    update(cell, 1);
     int x = cell % N, y = cell / N;
     for (int j = y - 1; j <= y + 1; j++)
         for (int i = x - 1; i <= x + 1; i++)
@@ -177,9 +200,20 @@ int Board::winner(int color) {
     return EMPTY;
 }
 
-// Heuristic from color's point of view: alignments + captures.
+static int captureValue(int stones) {
+    return CAPTURE[stones / 2 > 5 ? 5 : stones / 2];
+}
+
+// Heuristic from the point of view of color, the player to move.
 int Board::eval(int color) const {
-    int pb = caps[BLACK] / 2, pw = caps[WHITE] / 2;
-    int s = score + CAPTURE[pb > 5 ? 5 : pb] - CAPTURE[pw > 5 ? 5 : pw];
-    return color == BLACK ? s : -s;
+    int opp = other(color);
+    int s = color == BLACK ? score : -score;                  // alignments with room for five
+    s += captureValue(caps[color]) - captureValue(caps[opp]); // captured stones
+    // potential captures: a fraction of what the next capture would be worth
+    s += threats[color] * (captureValue(caps[color] + 2) - captureValue(caps[color])) / THREAT;
+    s -= threats[opp] * (captureValue(caps[opp] + 2) - captureValue(caps[opp])) / THREAT;
+    // figures: the player to move completes a four, or faces two fours it cannot both block
+    if (fours[color]) s += FIGURE;
+    else if (fours[opp] >= 2) s -= FIGURE;
+    return s;
 }

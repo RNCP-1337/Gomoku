@@ -51,31 +51,48 @@ get, and `beta` is the score the opponent is sure to get. If a move scores `>= b
 position. We stop looking at the other moves there (a "cutoff"). This gives the same result as plain Min-Max, much
 faster, when the best moves are tried first.
 
-**Candidate moves** (`genMoves`): only empty cells next to a stone. Each one is scored quickly with
-*what I gain by playing here + what the opponent would gain by playing here* (attack + defense). Moves are sorted by this
-score, which makes alpha-beta efficient. Only the best `WIDTH[depth]` legal moves are searched: 8 at the root, down to
+**Search space** (`genMoves`): only the empty cells next to a stone, i.e. the union of the 3x3 squares around every
+stone, not the whole board or one big rectangle (`Board::near` counts the stones around each cell). Each one is scored
+quickly with *what I gain by playing here + what the opponent would gain by playing here* (attack + defense). Moves are
+sorted by this score, which makes alpha-beta efficient. Only the best `WIDTH[depth]` legal moves are searched: 8 at the root, down to
 3 near the leaves. This limit is what allows 10 levels in well under half a second (about 0.1 s on average).
+The width is limited, never the depth: every line that does not end the game is searched down to level 10. The panel
+shows the depth the last search really reached.
 
 **Game end inside the tree** (`tryMove`): capturing 10 stones, or a five that cannot be broken, is a win.
 A five the opponent left on the board, that was not broken by a capture, is a loss. Wins get `WIN - distance`, so the
 AI prefers fast wins and slow losses.
 
-### Heuristic (`Board::delta`, `Board::eval`)
+### Heuristic (`Board::update`, `Board::eval`)
 
-Every set of 5 consecutive cells on the board (horizontal, vertical, both diagonals) is a *window*. A window that
-contains stones of only one color is a place where that color can still make five. It is worth, by number of stones:
+`eval(color)` gives the score of a position for `color`, the player to move. It adds these parts.
+
+**1. Alignments with room for five.** Every set of 5 consecutive cells on the board (horizontal, vertical, both
+diagonals) is a *window*. A window with stones of only one color is a place where that color can still make five.
+It is worth, by number of stones:
 
 | stones in the window | 0 | 1 | 2  | 3   | 4    | 5 (five) |
 |----------------------|---|---|----|-----|------|----------|
 | value                | 0 | 1 | 10 | 100 | 1000 | 100000   |
 
-A window with both colors is worth 0, because nobody can make five there. The board score is the sum of all windows,
-positive for Black and negative for White. With windows, open and blocked shapes get different values for free.
-An open three `__XXX__` is inside 3 windows of 3 stones. A three blocked on one side is inside only 1. Split shapes like
-`X_XX` are counted too.
+A window with both colors is worth 0, because nobody can make five there. This one rule covers several things.
+- **Current alignments:** more stones in a window means more points.
+- **Room to make five:** an alignment boxed in (by enemy stones or the edge) with less than 5 cells of room is in no
+  window, so it is worth 0.
+- **Freedom:** a free three `__XXX__` is in 3 windows of 3 stones (300). Half-free, `OXXX__`, it is in 1 window
+  (100). Flanked, `OXXXO`, it is in none (0).
+- **Split shapes:** shapes like `X_XX` are counted too.
 
-Captured pairs are added: 0, 300, 800, 2000, 6000 for 0 to 4 pairs.
+**2. Captured stones.** Pairs already captured are worth 0, 300, 800, 2000, 6000 (0 to 4 pairs).
 
-The score is **incremental**. Placing or removing a stone only changes the 20 windows that contain that cell (5 per
-direction), so `delta` recomputes only those 20 windows. The heuristic of a leaf is then just a read, and the same
-`delta` gives the attack + defense score used to sort the candidate moves.
+**3. Potential captures.** A pattern `X O O _` (X can capture the pair with one move) is worth, for X, a third of
+what that capture would add. It grows as a player gets close to 10 captures.
+
+**4. Figures.** A player who has a four (a window with 4 stones and an empty cell) and is to move completes five:
+big bonus. A player facing two fours can block only one: big penalty.
+
+**Both players:** every part is computed for both colors and subtracted (Black's score = -White's score).
+
+The score is **incremental**. Placing or removing a stone only changes the 20 windows (5 per direction) and 16 capture
+patterns (4 per direction) that contain that cell, so `update` recomputes only those. The heuristic of a leaf is then
+just a read. `delta` uses the same windows to score candidate moves (attack + defense) for move ordering.

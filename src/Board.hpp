@@ -18,6 +18,8 @@ struct Board {
     int near[SIZE];  // number of stones on each cell and its 8 neighbours
     int caps[3];     // stones captured BY each color
     int score;       // heuristic sum of all 5-cell windows, from BLACK's point of view
+    int fours[3];    // windows holding 4 stones of a color and an empty cell
+    int threats[3];  // enemy pairs each color could capture with one move
 
     Board();
     int  at(int x, int y) const;
@@ -34,6 +36,7 @@ struct Board {
     int  eval(int color) const;
 
 private:
+    void update(int cell, int sign);
     void put(int cell, int color);
     void remove(int cell);
 };

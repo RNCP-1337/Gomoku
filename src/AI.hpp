@@ -7,11 +7,12 @@ const int WIN = 1000000000;
 struct AI {
     Board &b;
     long nodes;               // positions visited during the last search
+    int  reached;             // deepest level actually reached by the last search
     int  rootMoves[32];       // root candidates in search order, for the debug panel
     int  rootScores[32];
     int  nroot;
 
-    AI(Board &board) : b(board), nodes(0), nroot(0) {}
+    AI(Board &board) : b(board), nodes(0), reached(0), nroot(0) {}
     int bestMove(int color);  // -1 if there is no legal move
 
 private:

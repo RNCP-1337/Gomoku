@@ -37,6 +37,7 @@ struct Game {
         aiCount = 0;
         ai.nroot = 0;
         ai.nodes = 0;
+        ai.reached = 0;
         msg = "Black starts.";
     }
     bool aiTurn() const {
@@ -100,7 +101,7 @@ static void drawPanel(const Game &g) {
     mvprintw(y++, PANEL, "AI timer : %.3f s", g.aiTime);
     attroff(A_BOLD);
     mvprintw(y++, PANEL, "Average  : %.3f s (%d searches)", g.aiCount ? g.aiTotal / g.aiCount : 0.0, g.aiCount);
-    mvprintw(y++, PANEL, "Search   : depth %d, %ld nodes", DEPTH, g.ai.nodes);
+    mvprintw(y++, PANEL, "Search   : depth %d, %ld nodes", g.ai.reached, g.ai.nodes);
     if (g.hint >= 0) mvprintw(y++, PANEL, "Suggested: %s for %s", cellName(g.hint).c_str(), NAMES[g.turn]);
     else y++;
     // Debug: the root candidates in the order they were searched, with their scores.
